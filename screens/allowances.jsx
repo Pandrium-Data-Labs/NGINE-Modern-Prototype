@@ -20,7 +20,7 @@ const _typeBadge = (type) => {
   );
 };
 
-const _statusTone = (s) => s === 'applied' ? 'success' : s === 'pending' ? 'warn' : 'default';
+const _alwStatusTone = (s) => s === 'applied' ? 'success' : s === 'pending' ? 'warn' : 'default';
 
 const _KpiCard = ({ label, value, sub, subTone, accent }) => (
   <div className="card" style={{ padding:0 }}>
@@ -276,6 +276,8 @@ const Allowances = ({ onCmd }) => {
   const [visibleCols, setVisibleCols] = React.useState(
     () => new Set(_ALW_COLS.filter(c => c.defaultOn).map(c => c.field))
   );
+  const [page, setPage]         = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
   const vis = (f) => visibleCols.has(f);
 
   if (view === 'new') {
@@ -287,6 +289,8 @@ const Allowances = ({ onCmd }) => {
       />
     );
   }
+
+  React.useEffect(() => { setPage(1); }, [search]);
 
   const allAllowances = [...extraAllow, ...ALLOWANCES];
   const filtered = allAllowances.filter(a => {
@@ -301,6 +305,10 @@ const Allowances = ({ onCmd }) => {
       (a.description || '').toLowerCase().includes(q)
     );
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // KPIs
   const totalAmt      = allAllowances.reduce((s, a) => s + a.amount, 0);
@@ -368,7 +376,7 @@ const Allowances = ({ onCmd }) => {
               <tr><td colSpan={11} style={{ textAlign:'center', color:'var(--text-3)', padding:'28px 0', fontSize:13 }}>
                 No allowances found{search ? ` for "${search}"` : ''}.
               </td></tr>
-            ) : filtered.map(a => (
+            ) : paginated.map(a => (
               <tr key={a.no}>
                 {vis('no')          && <td className="cell-mono cell-strong">{a.no}</td>}
                 {vis('type')        && <td>{_typeBadge(a.type)}</td>}
@@ -379,7 +387,7 @@ const Allowances = ({ onCmd }) => {
                 {vis('description') && <td style={{ fontSize:12, color:'var(--text-2)', maxWidth:240 }}><span style={{ display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.description||'—'}</span></td>}
                 {vis('amount')      && <td className="num tnum cell-strong">{fmtINR(a.amount, { compact:true })}</td>}
                 {vis('createdBy')   && <td style={{ fontSize:12.5 }}>{a.createdBy||'—'}</td>}
-                {vis('status')      && <td><Badge tone={_statusTone(a.status)}>{a.status}</Badge></td>}
+                {vis('status')      && <td><Badge tone={_alwStatusTone(a.status)}>{a.status}</Badge></td>}
                 <td>
                   <button className="btn btn-sm btn-ghost" style={{ padding:'2px 6px' }}
                     onClick={() => { setFormPrefill(a); setView('new'); }}>
@@ -390,6 +398,41 @@ const Allowances = ({ onCmd }) => {
             ))}
           </tbody>
         </table>
+        {/* Pagination */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            {filtered.length === 0 ? 'No results' : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(safePage-1)*pageSize+1}–{Math.min(safePage*pageSize,filtered.length)}</strong>{' '}<span>of {filtered.length} results</span></>}
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+            </div>
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button disabled={safePage===1} onClick={() => setPage(p => Math.max(1,p-1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===1?'default':'pointer', color:safePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                <Icon.ChevronLeft size={12}/> Prev
+              </button>
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                {safePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {totalPages}</span>
+              </div>
+              <button disabled={safePage===totalPages} onClick={() => setPage(p => Math.min(totalPages,p+1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===totalPages?'default':'pointer', color:safePage===totalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===totalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==totalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                Next <Icon.ChevronRight size={12}/>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Analytics */}

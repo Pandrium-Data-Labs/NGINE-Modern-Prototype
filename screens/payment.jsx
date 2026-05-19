@@ -774,9 +774,13 @@ const _INV_REG_COLS = [
 
 // ---- Payment dashboard (entry point) ----
 const CottonPayment = ({ onClose, onCmd }) => {
-  const [showForm, setShowForm] = React.useState(false);
-  const [drawer, setDrawer]     = React.useState(null);
-  const [search, setSearch]     = React.useState('');
+  const [showForm, setShowForm]   = React.useState(false);
+  const [drawer, setDrawer]       = React.useState(null);
+  const [search, setSearch]       = React.useState('');
+  const [page, setPage]           = React.useState(1);
+  const [pageSize, setPageSize]   = React.useState(10);
+
+  React.useEffect(() => { setPage(1); }, [search]);
 
   const allCrDr       = window.NCData.CR_DR_NOTES     || [];
   const allAllowances = window.NCData.ALLOWANCES       || [];
@@ -806,6 +810,10 @@ const CottonPayment = ({ onClose, onCmd }) => {
     const outstanding  = Math.max(0, netPayable - paidAmount);
     return { conf:c, deliveries, invoices, crdr, allowances, invoiceTotal, crTotal, drTotal, alwApplied, netAdj, netPayable, paidAmount, outstanding };
   });
+
+  const totalPages = Math.max(1, Math.ceil(confData.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = confData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const kpiInvoiced    = confData.reduce((s, d) => s + d.invoiceTotal, 0);
   const kpiAdj         = confData.reduce((s, d) => s + d.netAdj,       0);
@@ -869,7 +877,7 @@ const CottonPayment = ({ onClose, onCmd }) => {
             </tr>
           </thead>
           <tbody>
-            {confData.map(({ conf, deliveries, invoices, crdr, allowances, invoiceTotal, crTotal, drTotal, alwApplied, netAdj, netPayable, outstanding }) => {
+            {paginated.map(({ conf, deliveries, invoices, crdr, allowances, invoiceTotal, crTotal, drTotal, alwApplied, netAdj, netPayable, outstanding }) => {
               const confAdv = allAdvances.filter(a => a.buyer === conf.buyer && a.balance > 0);
               return (
                 <tr key={conf.no}
@@ -902,6 +910,42 @@ const CottonPayment = ({ onClose, onCmd }) => {
             })}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            {confData.length === 0 ? 'No results' : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(safePage-1)*pageSize+1}–{Math.min(safePage*pageSize,confData.length)}</strong>{' '}<span>of {confData.length} results</span></>}
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+            </div>
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button disabled={safePage===1} onClick={() => setPage(p => Math.max(1,p-1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===1?'default':'pointer', color:safePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                <Icon.ChevronLeft size={12}/> Prev
+              </button>
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                {safePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {totalPages}</span>
+              </div>
+              <button disabled={safePage===totalPages} onClick={() => setPage(p => Math.min(totalPages,p+1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===totalPages?'default':'pointer', color:safePage===totalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===totalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==totalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                Next <Icon.ChevronRight size={12}/>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {drawer?.type === 'conf' && (
@@ -1056,6 +1100,8 @@ const ConfirmationsList = ({ onOpen, onCmd, extraConfirmations = [] }) => {
   const ctrl = useTableControls(CONF_COLS);
   const [search, setSearch]           = React.useState('');
   const [showSugg,  setShowSugg]      = React.useState(false);
+  const [page, setPage]               = React.useState(1);
+  const [pageSize, setPageSize]       = React.useState(10);
   const [visibleCols, setVisibleCols] = React.useState(
     () => new Set(ALL_CONF_VIEW_COLS.filter(c => c.defaultOn).map(c => c.field))
   );
@@ -1113,7 +1159,14 @@ const ConfirmationsList = ({ onOpen, onCmd, extraConfirmations = [] }) => {
     return items.slice(0, 8);
   }, [search, allConfs]);
 
-  const clearAll = () => { setSearch(''); setTab('all'); };
+  const clearAll = () => { setSearch(''); setTab('all'); setPage(1); };
+
+  React.useEffect(() => { setPage(1); }, [search, tab]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
 
   // Delete handlers
   const allFilteredSelected = filtered.length > 0 && filtered.every(c => selected.includes(c.no));
@@ -1346,7 +1399,7 @@ const ConfirmationsList = ({ onOpen, onCmd, extraConfirmations = [] }) => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(c => {
+            {paginated.map(c => {
               const isSel    = selected.includes(c.no);
               const isExpSel = exportSel.includes(c.no);
               const isActive = isSel || isExpSel;
@@ -1412,6 +1465,75 @@ const ConfirmationsList = ({ onOpen, onCmd, extraConfirmations = [] }) => {
             )}
           </tbody>
         </table>
+
+        {/* ── Pagination bar ── */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+
+          {/* Left — record count */}
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            {filtered.length === 0
+              ? 'No results'
+              : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)}</strong> <span>of {filtered.length} results</span></>}
+          </span>
+
+          {/* Right — rows selector + prev/next */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+
+            {/* Rows per page */}
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>Show</span>
+              <select
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{
+                  padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6,
+                  background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit',
+                  cursor:'pointer', outline:'none', appearance:'none',
+                  backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s',
+                }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'}
+                onBlur={e => e.target.style.borderColor='var(--border)'}
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>/ page</span>
+            </div>
+
+            {/* Divider */}
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+
+            {/* Prev / page indicator / Next */}
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button
+                disabled={safePage === 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===1?'default':'pointer', color:safePage===1?'var(--text-4,var(--text-3))':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===1?0.45:1, transition:'border-color .12s, background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; } }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}
+              >
+                <Icon.ChevronLeft size={12} /> Prev
+              </button>
+
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center', letterSpacing:'.01em' }}>
+                {safePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {totalPages}</span>
+              </div>
+
+              <button
+                disabled={safePage === totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===totalPages?'default':'pointer', color:safePage===totalPages?'var(--text-4,var(--text-3))':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===totalPages?0.45:1, transition:'border-color .12s, background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==totalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; } }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}
+              >
+                Next <Icon.ChevronRight size={12} />
+              </button>
+            </div>
+
+          </div>
+        </div>
       </div>
 
       {/* ---- Export format picker modal ---- */}
@@ -1482,6 +1604,11 @@ const InvoicesList = ({ onCmd, data }) => {
     () => new Set(_INV_LIST_COLS.filter(c => c.defaultOn).map(c => c.field))
   );
   const vis = (f) => visibleCols.has(f);
+  const [page, setPage]         = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+  const totalPages = Math.max(1, Math.ceil(INVOICES.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = INVOICES.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   React.useEffect(() => {
     if (invNo) {
@@ -1525,7 +1652,7 @@ const InvoicesList = ({ onCmd, data }) => {
             </tr>
           </thead>
           <tbody>
-            {INVOICES.map(i => (
+            {paginated.map(i => (
               <tr key={i.no} id={`invoice-row-${i.no}`}>
                 {vis('no')      && <td className="cell-mono cell-strong">{i.no}</td>}
                 {vis('date')    && <td className="muted">{fmtDateShort(i.date)}</td>}
@@ -1539,6 +1666,42 @@ const InvoicesList = ({ onCmd, data }) => {
             ))}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            <strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(safePage-1)*pageSize+1}–{Math.min(safePage*pageSize,INVOICES.length)}</strong>{' '}<span>of {INVOICES.length} results</span>
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+            </div>
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button disabled={safePage===1} onClick={() => setPage(p => Math.max(1,p-1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===1?'default':'pointer', color:safePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                <Icon.ChevronLeft size={12}/> Prev
+              </button>
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                {safePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {totalPages}</span>
+              </div>
+              <button disabled={safePage===totalPages} onClick={() => setPage(p => Math.min(totalPages,p+1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===totalPages?'default':'pointer', color:safePage===totalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===totalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==totalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                Next <Icon.ChevronRight size={12}/>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

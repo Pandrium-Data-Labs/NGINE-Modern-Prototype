@@ -1113,12 +1113,23 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
   const [dShowSugg, setDShowSugg] = React.useState(false);
   const [iSearch,   setISearch]   = React.useState('');
   const [iShowSugg, setIShowSugg] = React.useState(false);
-  const [dExpMode, setDExpMode] = React.useState(false);
-  const [dExpSel,  setDExpSel]  = React.useState([]);
-  const [dFmtOpen, setDFmtOpen] = React.useState(false);
-  const [iExpMode, setIExpMode] = React.useState(false);
-  const [iExpSel,  setIExpSel]  = React.useState([]);
-  const [iFmtOpen, setIFmtOpen] = React.useState(false);
+  const [dExpMode,     setDExpMode]     = React.useState(false);
+  const [dExpSel,      setDExpSel]      = React.useState([]);
+  const [dFmtOpen,     setDFmtOpen]     = React.useState(false);
+  const [iExpMode,     setIExpMode]     = React.useState(false);
+  const [iExpSel,      setIExpSel]      = React.useState([]);
+  const [iFmtOpen,     setIFmtOpen]     = React.useState(false);
+  const [expMenuOpen,  setExpMenuOpen]  = React.useState(false);
+
+  const [dPage, setDPage]         = React.useState(1);
+  const [dPageSize, setDPageSize] = React.useState(10);
+  const [iPage, setIPage]         = React.useState(1);
+  const [iPageSize, setIPageSize] = React.useState(10);
+
+  React.useEffect(() => { setDPage(1); }, [dSearch, tab]);
+  React.useEffect(() => { setIPage(1); }, [iSearch]);
+
+  const cancelExport = () => { setDExpMode(false); setDExpSel([]); setIExpMode(false); setIExpSel([]); };
 
   const [delVisibleCols, setDelVisibleCols] = React.useState(
     () => new Set(_DEL_COLS.filter(c => c.defaultOn).map(c => c.field))
@@ -1178,6 +1189,10 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
   })();
   const filtered = dCtrl.sortData(dTextFiltered);
 
+  const dTotalPages = Math.max(1, Math.ceil(filtered.length / dPageSize));
+  const dSafePage   = Math.min(dPage, dTotalPages);
+  const dPaginated  = filtered.slice((dSafePage - 1) * dPageSize, dSafePage * dPageSize);
+
   const dSuggestions = !dSearch.trim() ? [] : (() => {
     const q = dSearch.toLowerCase(), seen = new Set(), items = [];
     allDeliveries.forEach(d => {
@@ -1197,6 +1212,10 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
     );
   })();
   const filteredInvoices = iCtrl.sortData(iTextFiltered);
+
+  const iTotalPages = Math.max(1, Math.ceil(filteredInvoices.length / iPageSize));
+  const iSafePage   = Math.min(iPage, iTotalPages);
+  const iPaginated  = filteredInvoices.slice((iSafePage - 1) * iPageSize, iSafePage * iPageSize);
 
   const iSuggestions = !iSearch.trim() ? [] : (() => {
     const q = iSearch.toLowerCase(), seen = new Set(), items = [];
@@ -1305,18 +1324,54 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
           <div className="page-sub">Track lots from station weighment to mill door · {allDeliveries.length} deliveries · {allInvoices.length} invoices</div>
         </div>
         <div className="page-actions">
-          {dExpMode ? (
+          {(dExpMode || iExpMode) ? (
             <>
-              <button className="btn btn-primary" disabled={dExpSel.length === 0} onClick={() => setDFmtOpen(true)}>
-                <Icon.Download size={14} /> {dExpSel.length > 0 ? `Export ${dExpSel.length}` : 'Export'}
+              <button className="btn btn-primary"
+                disabled={(dExpMode ? dExpSel.length : iExpSel.length) === 0}
+                onClick={() => dExpMode ? setDFmtOpen(true) : setIFmtOpen(true)}>
+                <Icon.Download size={14} />
+                {dExpMode
+                  ? (dExpSel.length > 0 ? `Export ${dExpSel.length} deliveries` : 'Select deliveries')
+                  : (iExpSel.length > 0 ? `Export ${iExpSel.length} invoices`   : 'Select invoices')}
               </button>
-              <button className="btn" onClick={() => { setDExpMode(false); setDExpSel([]); }}>
-                <Icon.X size={14} /> Cancel
-              </button>
+              <button className="btn" onClick={cancelExport}><Icon.X size={14} /> Cancel</button>
             </>
           ) : (
             <>
-              <button className="btn" onClick={() => setDExpMode(true)}><Icon.Download size={14} /> Export</button>
+              {/* Unified export dropdown */}
+              <div style={{ position:'relative' }}
+                onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setExpMenuOpen(false); }}
+                tabIndex={-1}>
+                <button className="btn" onClick={() => setExpMenuOpen(o => !o)}>
+                  <Icon.Download size={14} /> Export <Icon.ChevronDown size={12} style={{ marginLeft:2 }} />
+                </button>
+                {expMenuOpen && (
+                  <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, boxShadow:'0 4px 6px rgba(0,0,0,.06),0 12px 32px rgba(0,0,0,.16)', width:230, overflow:'hidden' }}>
+                    <div style={{ padding:'8px 12px 6px', fontSize:11, fontWeight:600, color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.06em' }}>Choose dataset</div>
+                    {[
+                      { label:'Deliveries', sub:`${filtered.length} rows`, icon:'Truck',   action:() => { setDExpMode(true); setExpMenuOpen(false); } },
+                      { label:'Invoices',   sub:`${filteredInvoices.length} rows`, icon:'Receipt', action:() => { setIExpMode(true); setExpMenuOpen(false); } },
+                    ].map(opt => {
+                      const Ic = Icon[opt.icon];
+                      return (
+                        <button key={opt.label} onClick={opt.action}
+                          style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 12px', background:'none', border:'none', borderTop:'1px solid var(--border)', cursor:'pointer', fontFamily:'inherit', textAlign:'left', transition:'background .1s' }}
+                          onMouseEnter={e => e.currentTarget.style.background='var(--surface-2)'}
+                          onMouseLeave={e => e.currentTarget.style.background='none'}>
+                          <span style={{ width:30, height:30, borderRadius:8, background:'var(--bg-2)', border:'1px solid var(--border)', display:'grid', placeItems:'center', flexShrink:0 }}>
+                            <Ic size={14} style={{ color:'var(--text-2)' }} />
+                          </span>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:600, color:'var(--text-1)' }}>{opt.label}</div>
+                            <div style={{ fontSize:11, color:'var(--text-3)', marginTop:1 }}>{opt.sub}</div>
+                          </div>
+                          <Icon.ChevronRight size={13} style={{ color:'var(--text-3)', marginLeft:'auto', flexShrink:0 }} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <button className="btn" onClick={() => setView('new-invoice')}><Icon.Receipt size={14} /> New invoice</button>
               <button className="btn btn-primary" onClick={() => setView('new-delivery')}><Icon.Truck size={14} /> New delivery</button>
             </>
@@ -1342,7 +1397,7 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
       </div>
 
       {/* Deliveries table */}
-      <div className="card" style={{ marginBottom:20 }}>
+      {!iExpMode && <div className="card" style={{ marginBottom:20 }}>
         <div className="card-header" style={{ gap:8, flexWrap:'wrap' }}>
           <div className="card-title">Deliveries</div>
           <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginLeft:8 }}>
@@ -1434,7 +1489,7 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
                 </td>
               </tr>
             )}
-            {filtered.map(d => {
+            {dPaginated.map(d => {
               const conf      = CONFIRMATIONS.find(c => c.no === d.conf);
               const inherited = conf?.tags || [];
               const own       = d.tags || [];
@@ -1464,10 +1519,45 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
             })}
           </tbody>
         </table>
-      </div>
+        {/* Pagination */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            {filtered.length === 0 ? 'No results' : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(dSafePage-1)*dPageSize+1}–{Math.min(dSafePage*dPageSize,filtered.length)}</strong>{' '}<span>of {filtered.length} results</span></>}
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+              <select value={dPageSize} onChange={e => { setDPageSize(Number(e.target.value)); setDPage(1); }}
+                style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+            </div>
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button disabled={dSafePage===1} onClick={() => setDPage(p => Math.max(1,p-1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:dSafePage===1?'default':'pointer', color:dSafePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:dSafePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(dSafePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                <Icon.ChevronLeft size={12}/> Prev
+              </button>
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                {dSafePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {dTotalPages}</span>
+              </div>
+              <button disabled={dSafePage===dTotalPages} onClick={() => setDPage(p => Math.min(dTotalPages,p+1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:dSafePage===dTotalPages?'default':'pointer', color:dSafePage===dTotalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:dSafePage===dTotalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(dSafePage!==dTotalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                Next <Icon.ChevronRight size={12}/>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>}
 
       {/* Invoices table */}
-      <div className="card">
+      {!dExpMode && <div className="card">
         <div className="card-header" style={{ gap:8 }}>
           <div className="card-title">Invoices</div>
           <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
@@ -1510,20 +1600,6 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
               )}
             </div>
             <ViewMenu cols={_INV_DI_COLS} visible={invVisibleCols} onChange={setInvVisibleCols} />
-            {iExpMode ? (
-              <>
-                <button className="btn btn-sm btn-primary" disabled={iExpSel.length === 0} onClick={() => setIFmtOpen(true)}>
-                  <Icon.Download size={13} /> {iExpSel.length > 0 ? `Export ${iExpSel.length}` : 'Export'}
-                </button>
-                <button className="btn btn-sm" onClick={() => { setIExpMode(false); setIExpSel([]); }}>
-                  <Icon.X size={13} /> Cancel
-                </button>
-              </>
-            ) : (
-              <button className="btn btn-sm btn-ghost" style={{ border:'none' }} onClick={() => setIExpMode(true)}>
-                <Icon.Download size={13} /> Export
-              </button>
-            )}
           </div>
         </div>
 
@@ -1552,7 +1628,7 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
                 </td>
               </tr>
             )}
-            {filteredInvoices.map(inv => {
+            {iPaginated.map(inv => {
               const conf      = CONFIRMATIONS.find(c => c.no === inv.conf);
               const dlv       = allDeliveries.find(d => d.conf === inv.conf);
               const inherited = [...new Set([...(conf?.tags || []), ...(dlv?.tags || [])])];
@@ -1581,7 +1657,42 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
             })}
           </tbody>
         </table>
-      </div>
+        {/* Pagination */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            {filteredInvoices.length === 0 ? 'No results' : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(iSafePage-1)*iPageSize+1}–{Math.min(iSafePage*iPageSize,filteredInvoices.length)}</strong>{' '}<span>of {filteredInvoices.length} results</span></>}
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+              <select value={iPageSize} onChange={e => { setIPageSize(Number(e.target.value)); setIPage(1); }}
+                style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+            </div>
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button disabled={iSafePage===1} onClick={() => setIPage(p => Math.max(1,p-1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:iSafePage===1?'default':'pointer', color:iSafePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:iSafePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(iSafePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                <Icon.ChevronLeft size={12}/> Prev
+              </button>
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                {iSafePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {iTotalPages}</span>
+              </div>
+              <button disabled={iSafePage===iTotalPages} onClick={() => setIPage(p => Math.min(iTotalPages,p+1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:iSafePage===iTotalPages?'default':'pointer', color:iSafePage===iTotalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:iSafePage===iTotalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(iSafePage!==iTotalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                Next <Icon.ChevronRight size={12}/>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>}
 
       {[
         { open: dFmtOpen, onClose: () => setDFmtOpen(false), count: dExpSel.length, doExport: doExportDeliveries },

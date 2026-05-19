@@ -158,6 +158,10 @@ const Dashboard = ({ onOpen, onCmd, userName, companyFY }) => {
   const buyerBalances = window.NCData.BUYERS.filter(b=>b.outstanding>0).sort((a,b)=>b.outstanding-a.outstanding).slice(0,4);
   const recentConfs   = CONFIRMATIONS.slice(0,6);
 
+  // ---- Attention pagination ----
+  const [attPage,     setAttPage]     = React.useState(1);
+  const [attPageSize, setAttPageSize] = React.useState(10);
+
   // ---- Edit mode state ----
   const [editMode, setEditMode] = React.useState(false);
   const [widgetOrder, setWidgetOrder] = React.useState(() => {
@@ -338,35 +342,74 @@ const Dashboard = ({ onOpen, onCmd, userName, companyFY }) => {
         </div>
       );
 
-      case 'attention': return (
-        <div className="card" style={{ flex:1 }}>
-          <div className="card-header">
-            <div>
-              <div className="card-title">Needs attention</div>
-              <div className="card-sub">Action items for today</div>
+      case 'attention': {
+        const attTotalPages = Math.max(1, Math.ceil(attention.length / attPageSize));
+        const attSafePage   = Math.min(attPage, attTotalPages);
+        const attPaginated  = attention.slice((attSafePage - 1) * attPageSize, attSafePage * attPageSize);
+        return (
+          <div className="card" style={{ flex:1 }}>
+            <div className="card-header">
+              <div>
+                <div className="card-title">Needs attention</div>
+                <div className="card-sub">Action items for today</div>
+              </div>
+              {attention.length > 0 && (
+                <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:20, height:20, borderRadius:99, background:'var(--negative)', color:'#fff', fontSize:11, fontWeight:700, flexShrink:0 }}>
+                  {attention.length}
+                </span>
+              )}
+            </div>
+            <div className="card-body" style={{ padding:'4px 18px 12px' }}>
+              {attention.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'32px 0', color:'var(--text-3)' }}>
+                  <Icon.CheckCircle2 size={28} style={{ marginBottom:10, color:'var(--positive)' }} />
+                  <div style={{ fontSize:13, fontWeight:500, color:'var(--text-2)' }}>All clear</div>
+                  <div style={{ fontSize:12, marginTop:4 }}>No pending actions</div>
+                </div>
+              ) : attPaginated.map(a => <ActionRow key={a.key} {...a} />)}
             </div>
             {attention.length > 0 && (
-              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:20, height:20, borderRadius:99, background:'var(--negative)', color:'#fff', fontSize:11, fontWeight:700, flexShrink:0 }}>
-                {attention.length}
-              </span>
-            )}
-          </div>
-          <div className="card-body" style={{ padding:'4px 18px 12px' }}>
-            {attention.length === 0 ? (
-              <div style={{ textAlign:'center', padding:'32px 0', color:'var(--text-3)' }}>
-                <Icon.CheckCircle2 size={28} style={{ marginBottom:10, color:'var(--positive)' }} />
-                <div style={{ fontSize:13, fontWeight:500, color:'var(--text-2)' }}>All clear</div>
-                <div style={{ fontSize:12, marginTop:4 }}>No pending actions</div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 14px', borderTop:'1px solid var(--border)', gap:10, flexWrap:'wrap' }}>
+                <span style={{ fontSize:11.5, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+                  <strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(attSafePage-1)*attPageSize+1}–{Math.min(attSafePage*attPageSize,attention.length)}</strong>{' of '}{attention.length}
+                </span>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <span style={{ fontSize:11.5, color:'var(--text-3)' }}>Show</span>
+                    <select value={attPageSize} onChange={e => { setAttPageSize(Number(e.target.value)); setAttPage(1); }}
+                      style={{ padding:'3px 20px 3px 7px', border:'1px solid var(--border)', borderRadius:5, background:'var(--bg-2)', color:'var(--text-1)', fontSize:11.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 5px center', transition:'border-color .12s' }}
+                      onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                      <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+                    </select>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:3 }}>
+                    <button disabled={attSafePage===1} onClick={() => setAttPage(p => Math.max(1,p-1))}
+                      style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:5, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:attSafePage===1?'default':'pointer', color:attSafePage===1?'var(--text-3)':'var(--text-1)', fontSize:11.5, fontFamily:'inherit', fontWeight:500, opacity:attSafePage===1?0.45:1, transition:'border-color .12s' }}
+                      onMouseEnter={e => { if(attSafePage!==1) e.currentTarget.style.borderColor='var(--accent)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; }}>
+                      <Icon.ChevronLeft size={11}/> Prev
+                    </button>
+                    <div style={{ padding:'3px 10px', borderRadius:5, border:'1px solid var(--border)', background:'var(--surface)', fontSize:11.5, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:52, textAlign:'center' }}>
+                      {attSafePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {attTotalPages}</span>
+                    </div>
+                    <button disabled={attSafePage===attTotalPages} onClick={() => setAttPage(p => Math.min(attTotalPages,p+1))}
+                      style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:5, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:attSafePage===attTotalPages?'default':'pointer', color:attSafePage===attTotalPages?'var(--text-3)':'var(--text-1)', fontSize:11.5, fontFamily:'inherit', fontWeight:500, opacity:attSafePage===attTotalPages?0.45:1, transition:'border-color .12s' }}
+                      onMouseEnter={e => { if(attSafePage!==attTotalPages) e.currentTarget.style.borderColor='var(--accent)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; }}>
+                      Next <Icon.ChevronRight size={11}/>
+                    </button>
+                  </div>
+                </div>
               </div>
-            ) : attention.map(a => <ActionRow key={a.key} {...a} />)}
+            )}
+            <div style={{ borderTop:'1px solid var(--border)', padding:'10px 14px', display:'flex', gap:6, flexWrap:'wrap' }}>
+              <button className="btn btn-sm btn-ghost" style={{ fontSize:11.5, gap:5, border:'none' }} onClick={() => onCmd('nav:delivery-invoices')}><Icon.Truck size={12}/> Deliveries</button>
+              <button className="btn btn-sm btn-ghost" style={{ fontSize:11.5, gap:5, border:'none' }} onClick={() => onCmd('nav:delivery-invoices')}><Icon.Receipt size={12}/> Invoices</button>
+              <button className="btn btn-sm btn-ghost" style={{ fontSize:11.5, gap:5, border:'none' }} onClick={() => onCmd('nav:commission')}><Icon.Coins size={12}/> Commission</button>
+            </div>
           </div>
-          <div style={{ borderTop:'1px solid var(--border)', padding:'10px 14px', display:'flex', gap:6, flexWrap:'wrap' }}>
-            <button className="btn btn-sm btn-ghost" style={{ fontSize:11.5, gap:5, border:'none' }} onClick={() => onCmd('nav:delivery-invoices')}><Icon.Truck size={12}/> Deliveries</button>
-            <button className="btn btn-sm btn-ghost" style={{ fontSize:11.5, gap:5, border:'none' }} onClick={() => onCmd('nav:delivery-invoices')}><Icon.Receipt size={12}/> Invoices</button>
-            <button className="btn btn-sm btn-ghost" style={{ fontSize:11.5, gap:5, border:'none' }} onClick={() => onCmd('nav:commission')}><Icon.Coins size={12}/> Commission</button>
-          </div>
-        </div>
-      );
+        );
+      }
 
       case 'commission': return (
         <div className="card" style={{ flex:1 }}>

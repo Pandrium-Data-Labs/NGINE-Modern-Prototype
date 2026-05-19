@@ -30,7 +30,7 @@ const _typeBadge = (type) => (
   </span>
 );
 
-const _statusTone = (s) => s === 'settled' ? 'success' : s === 'issued' ? 'info' : 'default';
+const _noteStatusTone = (s) => s === 'settled' ? 'success' : s === 'issued' ? 'info' : 'default';
 
 const _KpiCard = ({ label, value, sub, subTone, accent }) => (
   <div className="card" style={{ padding:0 }}>
@@ -272,10 +272,16 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
   const [formConfNo,   setFormConfNo]  = React.useState(initialConfNo || null);
   const [extraNotes,   setExtraNotes]  = React.useState([]);
   const [search,       setSearch]      = React.useState('');
+  const [page,         setPage]        = React.useState(1);
+  const [pageSize,     setPageSize]    = React.useState(10);
+  const [invPage,      setInvPage]     = React.useState(1);
+  const [invPageSize,  setInvPageSize] = React.useState(5);
   const [visibleCols,  setVisibleCols] = React.useState(
     () => new Set(_CRDR_COLS.filter(c => c.defaultOn).map(c => c.field))
   );
   const vis = (f) => visibleCols.has(f);
+
+  React.useEffect(() => { setPage(1); }, [search]);
 
   if (view === 'new') {
     return (
@@ -301,6 +307,9 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
       (n.description || '').toLowerCase().includes(q)
     );
   });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // KPIs
   const totalCR   = allNotes.filter(n => n.type === 'credit').reduce((s, n) => s + n.amount, 0);
@@ -377,7 +386,7 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
               <tr><td colSpan={12} style={{ textAlign:'center', color:'var(--text-3)', padding:'28px 0', fontSize:13 }}>
                 No notes found{search ? ` for "${search}"` : ''}.
               </td></tr>
-            ) : filtered.map(n => {
+            ) : paginated.map(n => {
               const invRecord = INVOICES.find(i => i.no === n.invoice);
               return (
                 <tr key={n.no}>
@@ -408,7 +417,7 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
                     </td>
                   )}
                   {vis('approvedBy')  && <td style={{ fontSize:12.5 }}>{n.approvedBy||<span style={{ color:'var(--text-3)' }}>—</span>}</td>}
-                  {vis('status')      && <td><Badge tone={_statusTone(n.status)}>{n.status}</Badge></td>}
+                  {vis('status')      && <td><Badge tone={_noteStatusTone(n.status)}>{n.status}</Badge></td>}
                   <td>
                     <button className="btn btn-sm btn-ghost" style={{ padding:'2px 6px' }}
                       onClick={() => { setFormPrefill(n); setFormConfNo(n.conf || null); setView('new'); }}>
@@ -420,6 +429,41 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
             })}
           </tbody>
         </table>
+        {/* Pagination */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+            {filtered.length === 0 ? 'No results' : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(safePage-1)*pageSize+1}–{Math.min(safePage*pageSize,filtered.length)}</strong>{' '}<span>of {filtered.length} results</span></>}
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+              </select>
+              <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+            </div>
+            <div style={{ width:1, height:18, background:'var(--border)' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <button disabled={safePage===1} onClick={() => setPage(p => Math.max(1,p-1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===1?'default':'pointer', color:safePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                <Icon.ChevronLeft size={12}/> Prev
+              </button>
+              <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                {safePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {totalPages}</span>
+              </div>
+              <button disabled={safePage===totalPages} onClick={() => setPage(p => Math.min(totalPages,p+1))}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:safePage===totalPages?'default':'pointer', color:safePage===totalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:safePage===totalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                onMouseEnter={e => { if(safePage!==totalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                Next <Icon.ChevronRight size={12}/>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Analytics */}
@@ -444,6 +488,9 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
           if (n.type === 'credit') byInvoice[key].crCount++; else byInvoice[key].drCount++;
         });
         const invoiceEntries = Object.entries(byInvoice).sort((a, b) => b[1].amt - a[1].amt);
+        const invTotalPages = Math.max(1, Math.ceil(invoiceEntries.length / invPageSize));
+        const invSafePage   = Math.min(invPage, invTotalPages);
+        const invPaginated  = invoiceEntries.slice((invSafePage - 1) * invPageSize, invSafePage * invPageSize);
 
         return (
           <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)', gap:14, marginTop:14 }}>
@@ -485,13 +532,14 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
                 <div style={{ fontSize:12, color:'var(--text-3)', marginTop:2 }}>{invoiceEntries.length} invoice{invoiceEntries.length!==1?'s':''} with adjustments</div>
               </div>
               <div style={{ padding:'4px 0' }}>
-                {invoiceEntries.map(([inv, data], i) => {
+                {invPaginated.map(([inv, data], i) => {
                   const invRecord = INVOICES.find(r => r.no === inv);
+                  const rowNum = (invSafePage - 1) * invPageSize + i + 1;
                   return (
-                    <div key={inv} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom:i < invoiceEntries.length-1?'1px solid var(--border)':'none', transition:'background .1s' }}
+                    <div key={inv} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom:i < invPaginated.length-1?'1px solid var(--border)':'none', transition:'background .1s' }}
                       onMouseEnter={e => e.currentTarget.style.background='var(--surface-2)'}
                       onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <div style={{ width:24, height:24, borderRadius:'50%', background:'var(--surface-2)', border:'1px solid var(--border)', display:'grid', placeItems:'center', fontSize:11, fontWeight:700, color:'var(--text-3)', flexShrink:0 }}>{i+1}</div>
+                      <div style={{ width:24, height:24, borderRadius:'50%', background:'var(--surface-2)', border:'1px solid var(--border)', display:'grid', placeItems:'center', fontSize:11, fontWeight:700, color:'var(--text-3)', flexShrink:0 }}>{rowNum}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                           <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:'var(--accent)' }}>{inv}</span>
@@ -510,6 +558,41 @@ const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
                     </div>
                   );
                 })}
+              </div>
+              {/* Affected invoices pagination */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:'1px solid var(--border)', gap:12, flexWrap:'wrap' }}>
+                <span style={{ fontSize:12, color:'var(--text-3)', whiteSpace:'nowrap' }}>
+                  {invoiceEntries.length === 0 ? 'No results' : <><strong style={{ color:'var(--text-1)', fontWeight:600 }}>{(invSafePage-1)*invPageSize+1}–{Math.min(invSafePage*invPageSize,invoiceEntries.length)}</strong>{' '}<span>of {invoiceEntries.length} invoice{invoiceEntries.length!==1?'s':''}</span></>}
+                </span>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:12, color:'var(--text-3)' }}>Show</span>
+                    <select value={invPageSize} onChange={e => { setInvPageSize(Number(e.target.value)); setInvPage(1); }}
+                      style={{ padding:'5px 24px 5px 9px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', color:'var(--text-1)', fontSize:12.5, fontFamily:'inherit', cursor:'pointer', outline:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 7px center', transition:'border-color .12s' }}
+                      onFocus={e => e.target.style.borderColor='var(--accent)'} onBlur={e => e.target.style.borderColor='var(--border)'}>
+                      <option value={5}>5</option><option value={10}>10</option><option value={25}>25</option>
+                    </select>
+                    <span style={{ fontSize:12, color:'var(--text-3)' }}>/ page</span>
+                  </div>
+                  <div style={{ width:1, height:18, background:'var(--border)' }} />
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <button disabled={invSafePage===1} onClick={() => setInvPage(p => Math.max(1,p-1))}
+                      style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:invSafePage===1?'default':'pointer', color:invSafePage===1?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:invSafePage===1?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                      onMouseEnter={e => { if(invSafePage!==1){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                      <Icon.ChevronLeft size={12}/> Prev
+                    </button>
+                    <div style={{ padding:'5px 12px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', fontSize:12, fontWeight:600, color:'var(--text-1)', whiteSpace:'nowrap', minWidth:64, textAlign:'center' }}>
+                      {invSafePage} <span style={{ fontWeight:400, color:'var(--text-3)' }}>/ {invTotalPages}</span>
+                    </div>
+                    <button disabled={invSafePage===invTotalPages} onClick={() => setInvPage(p => Math.min(invTotalPages,p+1))}
+                      style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--bg-2)', cursor:invSafePage===invTotalPages?'default':'pointer', color:invSafePage===invTotalPages?'var(--text-3)':'var(--text-1)', fontSize:12, fontFamily:'inherit', fontWeight:500, opacity:invSafePage===invTotalPages?0.45:1, transition:'border-color .12s,background .12s', whiteSpace:'nowrap' }}
+                      onMouseEnter={e => { if(invSafePage!==invTotalPages){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.background='var(--surface-2,var(--bg-2))'; }}}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg-2)'; }}>
+                      Next <Icon.ChevronRight size={12}/>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
