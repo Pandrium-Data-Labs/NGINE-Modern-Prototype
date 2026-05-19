@@ -272,6 +272,8 @@ const _SBL_COLS = [
   { field:'status',    label:'Status',       defaultOn:true  },
 ];
 
+
+
 const _SBL_SORT_COLS = [
   { field:'no', label:'Entry No.', type:'text' }, { field:'broker', label:'Sub-broker', type:'text' },
   { field:'confNo', label:'Conf No.', type:'text' }, { field:'date', label:'Date', type:'date' },
@@ -302,9 +304,9 @@ const SubBrokerLedger = ({ onCmd }) => {
     if (search) {
       const q = search.toLowerCase();
       rows = rows.filter(e =>
-        e.no.toLowerCase().includes(q) ||
-        e.broker.toLowerCase().includes(q) ||
-        e.confNo.toLowerCase().includes(q) ||
+        e.no.toLowerCase().includes(q)           ||
+        e.broker.toLowerCase().includes(q)       ||
+        e.confNo.toLowerCase().includes(q)       ||
         (e.ciNo || '').toLowerCase().includes(q)
       );
     }
@@ -399,7 +401,6 @@ const SubBrokerLedger = ({ onCmd }) => {
             </>
           ) : (
             <>
-              <ViewMenu cols={_SBL_COLS} visible={visibleCols} onChange={setVisibleCols} />
               <button className="btn" onClick={() => setExportMode(true)}><Icon.Download size={14}/> Export</button>
               <button className="btn btn-primary" onClick={() => setView('new')}><Icon.Plus size={14}/> New entry</button>
             </>
@@ -489,7 +490,7 @@ const SubBrokerLedger = ({ onCmd }) => {
               </button>
             ))}
           </div>
-          <div style={{ marginLeft:'auto' }}>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
             <label style={{ display:'flex', alignItems:'center', gap:7, border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', padding:'0 10px', cursor:'text' }}
               onFocusCapture={e => e.currentTarget.style.borderColor='var(--accent)'}
               onBlurCapture={e => e.currentTarget.style.borderColor='var(--border)'}
@@ -499,6 +500,7 @@ const SubBrokerLedger = ({ onCmd }) => {
                 style={{ flex:1, border:'none', background:'transparent', padding:'6px 0', outline:'none', fontSize:13, color:'var(--text-1)', fontFamily:'inherit', minWidth:0, width:160 }} />
               {search && <button onClick={() => setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', color:'var(--text-3)', padding:2, flexShrink:0 }}><Icon.X size={12}/></button>}
             </label>
+            <ViewMenu cols={_SBL_COLS} visible={visibleCols} onChange={setVisibleCols} />
           </div>
         </div>
 

@@ -3,7 +3,15 @@
 const { Field, Input, Select, Textarea, Checkbox, Radio, Badge, Section, DatePicker, TagInput, fmtINR, fmtNum } = window.UI;
 
 // ----- Workflow sidebar -----
-const ConfSidebar = ({ prefill, deliveries, invoices, onCmd, form, onTagsChange, editMode }) => {
+const CRDR_REASON_LABELS = {
+  'bale-return':      'Bale Return',
+  'price-correction': 'Price Correction',
+  'mill-weight':      'Mill Weight Variance',
+  'duplicate-inv':    'Duplicate Invoice',
+  'other':            'Other',
+};
+
+const ConfSidebar = ({ prefill, deliveries, invoices, crdrNotes, onCmd, form, onTagsChange, editMode }) => {
   const pct          = prefill.balesMin ? Math.round(((prefill.delivered || 0) / prefill.balesMin) * 100) : 0;
   const deliveryDone = pct >= 100;
   const invoiced     = prefill.invoiced;
@@ -51,6 +59,8 @@ const ConfSidebar = ({ prefill, deliveries, invoices, onCmd, form, onTagsChange,
         <div className="card-body" style={{ padding:'8px 12px 12px', display:'flex', flexDirection:'column', gap:6 }}>
           <ActionBtn id="delivery" icon={Icon.Truck}  label="Record delivery" done={deliveryDone} onClick={() => onCmd({ action:'new:delivery', confNo: prefill.no })} />
           <ActionBtn id="payment"  icon={Icon.Wallet} label="Record payment"  done={paid}         onClick={() => onCmd('nav:payment')} />
+          <ActionBtn id="cr-note" icon={Icon.FileText} label="New CR note" done={false} onClick={() => onCmd({ action:'new:crdr', confNo: prefill.no, noteType:'credit' })} />
+          <ActionBtn id="dr-note" icon={Icon.FileText} label="New DR note" done={false} onClick={() => onCmd({ action:'new:crdr', confNo: prefill.no, noteType:'debit'  })} />
           <div style={{ borderTop:'1px solid var(--border)', margin:'2px 0' }} />
           <button className="btn btn-ghost" style={{ justifyContent:'flex-start', width:'100%', gap:8 }} onClick={() => onCmd('export')}>
             <Icon.Download size={13} /> Print confirmation
@@ -126,7 +136,7 @@ const ConfSidebar = ({ prefill, deliveries, invoices, onCmd, form, onTagsChange,
       </div>
 
       {/* Linked records */}
-      {(deliveries.length > 0 || invoices.length > 0) && (
+      {(deliveries.length > 0 || invoices.length > 0 || crdrNotes.length > 0) && (
         <div className="card">
           <div className="card-header" style={{ padding:'10px 16px', minHeight:'unset' }}>
             <div className="card-title" style={{ fontSize:12 }}>Linked records</div>
@@ -134,7 +144,7 @@ const ConfSidebar = ({ prefill, deliveries, invoices, onCmd, form, onTagsChange,
           <div className="card-body" style={{ padding:'4px 16px 10px' }}>
             {deliveries.length > 0 && (
               <div
-                style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom: invoices.length ? '1px solid var(--border)' : 'none', cursor:'pointer' }}
+                style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom: (invoices.length || crdrNotes.length) ? '1px solid var(--border)' : 'none', cursor:'pointer' }}
                 onClick={() => document.getElementById('sc-deliveries')?.scrollIntoView({ behavior:'smooth', block:'start' })}
               >
                 <div style={{ display:'flex', alignItems:'center', gap:7 }}>
@@ -146,7 +156,7 @@ const ConfSidebar = ({ prefill, deliveries, invoices, onCmd, form, onTagsChange,
             )}
             {invoices.length > 0 && (
               <div
-                style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', cursor:'pointer' }}
+                style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom: crdrNotes.length ? '1px solid var(--border)' : 'none', cursor:'pointer' }}
                 onClick={() => document.getElementById('sc-invoices')?.scrollIntoView({ behavior:'smooth', block:'start' })}
               >
                 <div style={{ display:'flex', alignItems:'center', gap:7 }}>
@@ -154,6 +164,18 @@ const ConfSidebar = ({ prefill, deliveries, invoices, onCmd, form, onTagsChange,
                   <span style={{ fontSize:13, color:'var(--accent)' }}>Invoices</span>
                 </div>
                 <span style={{ fontSize:13, fontWeight:600 }}>{invoices.length}</span>
+              </div>
+            )}
+            {crdrNotes.length > 0 && (
+              <div
+                style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', cursor:'pointer' }}
+                onClick={() => document.getElementById('sc-crdrnotes')?.scrollIntoView({ behavior:'smooth', block:'start' })}
+              >
+                <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                  <Icon.FileText size={12} style={{ color:'var(--text-3)' }} />
+                  <span style={{ fontSize:13, color:'var(--accent)' }}>CR / DR Notes</span>
+                </div>
+                <span style={{ fontSize:13, fontWeight:600 }}>{crdrNotes.length}</span>
               </div>
             )}
           </div>
@@ -238,6 +260,7 @@ const SaleConfirmation = ({ onClose, onCmd, prefill, extraConfirmations = [], on
 
   const invoices   = window.NCData.INVOICES.filter(inv => inv.conf === form.confNo);
   const deliveries = window.NCData.DELIVERIES.filter(d => d.conf === form.confNo);
+  const crdrNotes  = (window.NCData.CR_DR_NOTES || []).filter(n => n.conf === form.confNo);
 
   const handleInvoiceClick = (invNo) => { if (onCmd) onCmd(`open:invoice:${invNo}`); };
   const handleCancelEdit   = () => { if (isNew) onClose(); else setEditMode(false); };
@@ -527,6 +550,73 @@ const SaleConfirmation = ({ onClose, onCmd, prefill, extraConfirmations = [], on
                   </table>
                 </div>
               )}
+
+              {/* CR / DR Notes */}
+              {crdrNotes.length > 0 && (
+                <div id="sc-crdrnotes" className="card" style={{ marginTop:16 }}>
+                  <div className="card-header">
+                    <div className="card-title">CR / DR Notes</div>
+                    <span className="muted" style={{ fontSize:12 }}>{crdrNotes.length} note{crdrNotes.length !== 1 ? 's' : ''}</span>
+                    <div style={{ marginLeft:'auto', display:'flex', gap:6 }}>
+                      <button className="btn btn-sm" onClick={() => onCmd({ action:'new:crdr', confNo: prefill?.no, noteType:'credit' })}>
+                        <Icon.Plus size={12} /> CR Note
+                      </button>
+                      <button className="btn btn-sm" onClick={() => onCmd({ action:'new:crdr', confNo: prefill?.no, noteType:'debit' })}>
+                        <Icon.Plus size={12} /> DR Note
+                      </button>
+                    </div>
+                  </div>
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th style={{ width:120 }}>Note No</th>
+                        <th style={{ width:40 }}>Type</th>
+                        <th>Date</th>
+                        <th>Reason</th>
+                        <th>Invoice</th>
+                        <th>Description</th>
+                        <th className="num">Amount</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {crdrNotes.map(n => (
+                        <tr key={n.no}>
+                          <td className="cell-mono cell-strong">{n.no}</td>
+                          <td>
+                            <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 8px', borderRadius:999, fontSize:11, fontWeight:700, letterSpacing:'.05em', background: n.type === 'credit' ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.10)', color: n.type === 'credit' ? '#15803d' : '#dc2626' }}>
+                              {n.type === 'credit' ? 'CR' : 'DR'}
+                            </span>
+                          </td>
+                          <td className="muted">{window.NCData.fmtDateShort(n.date)}</td>
+                          <td style={{ fontSize:12.5 }}>{CRDR_REASON_LABELS[n.reason] || n.reason}</td>
+                          <td className="cell-mono muted" style={{ fontSize:12 }}>{n.invoice}</td>
+                          <td style={{ fontSize:12.5, maxWidth:200, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{n.description}</td>
+                          <td className="num tnum cell-strong" style={{ color: n.type === 'credit' ? 'var(--positive)' : 'var(--negative)' }}>{fmtINR(n.amount, { compact:true })}</td>
+                          <td><Badge tone={n.status === 'settled' ? 'success' : n.status === 'issued' ? 'info' : 'default'}>{n.status}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* New CR/DR shortcut when no notes yet */}
+              {crdrNotes.length === 0 && invoices.length > 0 && (
+                <div className="card" style={{ marginTop:16 }}>
+                  <div className="card-body" style={{ padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontSize:13, color:'var(--text-3)' }}>No CR / DR notes for this confirmation.</span>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <button className="btn btn-sm" onClick={() => onCmd({ action:'new:crdr', confNo: prefill?.no, noteType:'credit' })}>
+                        <Icon.Plus size={12} /> CR Note
+                      </button>
+                      <button className="btn btn-sm" onClick={() => onCmd({ action:'new:crdr', confNo: prefill?.no, noteType:'debit' })}>
+                        <Icon.Plus size={12} /> DR Note
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -595,7 +685,7 @@ const SaleConfirmation = ({ onClose, onCmd, prefill, extraConfirmations = [], on
         {/* Right — sticky sidebar (existing confirmations only) */}
         {prefill && (
           <div style={{ position:'sticky', top:16 }}>
-            <ConfSidebar prefill={prefill} deliveries={deliveries} invoices={invoices} onCmd={onCmd} form={form} onTagsChange={(tags) => setForm(f => ({ ...f, tags }))} editMode={editMode} />
+            <ConfSidebar prefill={prefill} deliveries={deliveries} invoices={invoices} crdrNotes={crdrNotes} onCmd={onCmd} form={form} onTagsChange={(tags) => setForm(f => ({ ...f, tags }))} editMode={editMode} />
           </div>
         )}
       </div>

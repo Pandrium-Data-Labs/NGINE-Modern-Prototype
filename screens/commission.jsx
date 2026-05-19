@@ -63,13 +63,139 @@ const CISearchBox = ({ value, onChange, placeholder }) => (
   </div>
 );
 
+// ----- Invoice Type Drawer -----
+const _InvoiceTypeDrawer = ({ onSelect, onClose }) => {
+  const [visible, setVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const dismiss = () => { setVisible(false); setTimeout(onClose, 230); };
+  const choose  = (type) => { setVisible(false); setTimeout(() => onSelect(type), 230); };
+
+  const OPTIONS = [
+    {
+      key:   'buyer',
+      Ic:    Icon.User,
+      title: 'Buyer only',
+      desc:  'Bill brokerage commission directly to the buyer of this trade.',
+      color: '#2563eb',
+      bg:    'rgba(37,99,235,.06)',
+      border:'rgba(37,99,235,.20)',
+    },
+    {
+      key:   'seller',
+      Ic:    Icon.Building,
+      title: 'Seller only',
+      desc:  'Bill brokerage commission directly to the seller of this trade.',
+      color: '#059669',
+      bg:    'rgba(5,150,105,.06)',
+      border:'rgba(5,150,105,.20)',
+    },
+    {
+      key:   'both',
+      Ic:    Icon.Users,
+      title: 'Buyer & Seller',
+      desc:  'Create separate commission invoices for both parties in one step.',
+      color: '#7c3aed',
+      bg:    'rgba(124,58,237,.06)',
+      border:'rgba(124,58,237,.20)',
+    },
+  ];
+
+  return (
+    <div
+      onClick={dismiss}
+      style={{
+        position:'fixed', inset:0, zIndex:400,
+        background: visible ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,0)',
+        transition:'background .23s',
+        display:'flex', alignItems:'flex-end',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width:'100%',
+          background:'var(--surface)',
+          borderRadius:'16px 16px 0 0',
+          boxShadow:'0 -8px 48px rgba(0,0,0,.18)',
+          transform: visible ? 'translateY(0)' : 'translateY(100%)',
+          transition:'transform .25s cubic-bezier(.32,.72,0,1)',
+          paddingBottom:36,
+        }}
+      >
+        {/* Drag handle */}
+        <div style={{ display:'flex', justifyContent:'center', padding:'12px 0 6px' }}>
+          <div style={{ width:36, height:4, borderRadius:999, background:'var(--border)' }} />
+        </div>
+
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', padding:'8px 28px 22px' }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:700, color:'var(--text-1)', marginBottom:4 }}>
+              New commission invoice
+            </div>
+            <div style={{ fontSize:13.5, color:'var(--text-3)' }}>
+              Who should this commission be billed to?
+            </div>
+          </div>
+          <button className="btn btn-sm btn-ghost" style={{ marginTop:2, flexShrink:0 }} onClick={dismiss}>
+            <Icon.X size={15} />
+          </button>
+        </div>
+
+        {/* Option cards */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, padding:'0 28px' }}>
+          {OPTIONS.map(({ key, Ic, title, desc, color, bg, border }) => (
+            <button
+              key={key}
+              onClick={() => choose(key)}
+              style={{
+                display:'flex', flexDirection:'column', alignItems:'flex-start', gap:14,
+                padding:'22px 20px', borderRadius:12,
+                border:`1.5px solid ${border}`, background:bg,
+                cursor:'pointer', textAlign:'left', fontFamily:'inherit',
+                transition:'border-color .12s, transform .12s, box-shadow .12s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = color;
+                e.currentTarget.style.transform   = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow   = `0 6px 20px ${color}22`;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = border;
+                e.currentTarget.style.transform   = '';
+                e.currentTarget.style.boxShadow   = '';
+              }}
+            >
+              <div style={{ width:42, height:42, borderRadius:10, background:`${color}20`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <Ic size={20} style={{ color }} />
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14.5, fontWeight:700, color:'var(--text-1)', marginBottom:6 }}>{title}</div>
+                <div style={{ fontSize:12.5, color:'var(--text-3)', lineHeight:1.6 }}>{desc}</div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:12.5, fontWeight:600, color }}>
+                Select <Icon.ChevronRight size={13} />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ----- New Commission Invoice form -----
-const NewCommissionInvoice = ({ onClose, onCmd }) => {
+const NewCommissionInvoice = ({ onClose, onCmd, initialParty }) => {
   const [form, setForm] = React.useState({
     ciNo:        'CI-26-0007',
     date:        _ciTodayStr,
     confNo:      '',
-    party:       'buyer',
+    party:       initialParty || 'buyer',
     partyName:   '',
     candies:     '',
     rate:        '150',
@@ -665,7 +791,9 @@ const _COMM_COLS = [
 
 // ----- Main list -----
 const CommissionInvoices = ({ onCmd, extraCommInvoices = [] }) => {
-  const [view, setView] = React.useState('list');
+  const [view,          setView]          = React.useState('list');
+  const [drawerOpen,    setDrawerOpen]    = React.useState(false);
+  const [selectedParty, setSelectedParty] = React.useState(null);
   const [tab,  setTab]  = React.useState('all');
   const ctrl = useTableControls(CI_COLS);
   const [exportMode, setExportMode] = React.useState(false);
@@ -679,7 +807,7 @@ const CommissionInvoices = ({ onCmd, extraCommInvoices = [] }) => {
   const allInvoices = [...extraCommInvoices, ...COMM_INVOICES];
 
   if (view === 'new') {
-    return <NewCommissionInvoice onClose={() => setView('list')} onCmd={onCmd} />;
+    return <NewCommissionInvoice onClose={() => { setView('list'); setSelectedParty(null); }} onCmd={onCmd} initialParty={selectedParty} />;
   }
   if (view?.type === 'detail') {
     return <CommissionDetail key={view.item.no} invoice={view.item} allInvoices={allInvoices}
@@ -767,9 +895,8 @@ const CommissionInvoices = ({ onCmd, extraCommInvoices = [] }) => {
             </>
           ) : (
             <>
-              <ViewMenu cols={_COMM_COLS} visible={visibleCols} onChange={setVisibleCols} />
               <button className="btn" onClick={() => setExportMode(true)}><Icon.Download size={14} /> Export</button>
-              <button className="btn btn-primary" onClick={() => setView('new')}><Icon.Plus size={14} /> New invoice</button>
+              <button className="btn btn-primary" onClick={() => setDrawerOpen(true)}><Icon.Plus size={14} /> New invoice</button>
             </>
           )}
         </div>
@@ -807,6 +934,9 @@ const CommissionInvoices = ({ onCmd, extraCommInvoices = [] }) => {
                 </span>
               </button>
             ))}
+          </div>
+          <div style={{ marginLeft:'auto' }}>
+            <ViewMenu cols={_COMM_COLS} visible={visibleCols} onChange={setVisibleCols} />
           </div>
         </div>
 
@@ -908,6 +1038,14 @@ const CommissionInvoices = ({ onCmd, extraCommInvoices = [] }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Invoice type drawer */}
+      {drawerOpen && (
+        <_InvoiceTypeDrawer
+          onSelect={(type) => { setSelectedParty(type); setDrawerOpen(false); setView('new'); }}
+          onClose={() => setDrawerOpen(false)}
+        />
       )}
     </div>
   );

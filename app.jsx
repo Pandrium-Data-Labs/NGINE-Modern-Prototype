@@ -152,6 +152,7 @@ const App = () => {
       else if (t === 'delivery') setRoute({ name: 'delivery-invoices', data: { openNewDelivery: true, confNo: cmdOrAction.confNo } });
       else if (t === 'buyer')   setRoute({ name: 'buyer', data: null });
       else if (t === 'payment') setRoute({ name: 'payment', data: null });
+      else if (t === 'crdr')    setRoute({ name: 'cr-dr-notes', data: { confNo: cmdOrAction.confNo, noteType: cmdOrAction.noteType } });
       else showToast(`Quick-add: ${t}`);
     } else if (action.startsWith('open:invoice:')) {
       setRoute({ name: 'invoices', data: { invNo: action.slice('open:invoice:'.length) } });
@@ -240,7 +241,7 @@ const App = () => {
       case 'sub-broker-ledger':  return <window.SubBrokerLedger onCmd={handleCmd} />;
       case 'comm-receipts':      return <window.CommissionReceipts onCmd={handleCmd} />;
       case 'company-settings':  return <window.CompanySettings companies={companies} setCompanies={setCompanies} currentId={tweaks.company} setCurrentCompany={(id) => setTweak('company', id)} onCmd={handleCmd} />;
-      case 'cr-dr-notes':  return <window.CrDrNotes onCmd={handleCmd} />;
+      case 'cr-dr-notes':  return <window.CrDrNotes onCmd={handleCmd} initialConfNo={route.data?.confNo} initialType={route.data?.noteType} />;
       case 'advance-payment': return <window.AdvancePayment onCmd={handleCmd} />;
       case 'charity-cheque': return <window.CharityCheque onCmd={handleCmd} />;
       case 'millweight':   return <window.Millweight onCmd={handleCmd} />;

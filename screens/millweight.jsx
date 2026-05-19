@@ -466,14 +466,13 @@ const Millweight = ({ onCmd }) => {
   const acceptedCount = allRecords.filter(r => r.status === 'accepted').length;
   const disputedCount = allRecords.filter(r => r.status === 'disputed').length;
 
-  // Filters
   const filtered = allRecords.filter(r => {
     if (filterStatus !== 'all' && r.status !== filterStatus) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
-      r.no.toLowerCase().includes(q)           ||
-      r.conf.toLowerCase().includes(q)          ||
+      r.no.toLowerCase().includes(q)              ||
+      r.conf.toLowerCase().includes(q)             ||
       (r.delivery || '').toLowerCase().includes(q) ||
       r.buyer.toLowerCase().includes(q)
     );
@@ -487,7 +486,6 @@ const Millweight = ({ onCmd }) => {
           <div className="page-sub">{allRecords.length} record{allRecords.length !== 1 ? 's' : ''}</div>
         </div>
         <div className="page-actions">
-          <ViewMenu cols={_MW_COLS} visible={visibleCols} onChange={setVisibleCols} />
           <button className="btn btn-primary" onClick={() => { setFormPrefill(null); setShowForm(true); }}>
             <Icon.Plus size={14} /> Record millweight
           </button>
@@ -524,49 +522,44 @@ const Millweight = ({ onCmd }) => {
         />
       </div>
 
-      {/* Filters + search */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Status pills */}
-        <div style={{ display: 'flex', gap: 3 }}>
-          {['all', 'pending', 'accepted', 'disputed'].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)} style={{
-              padding: '4px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 500,
-              border: '1px solid', transition: 'all .12s',
-              background:  filterStatus === s ? 'var(--accent)' : 'transparent',
-              color:       filterStatus === s ? '#fff' : 'var(--text-2)',
-              borderColor: filterStatus === s ? 'var(--accent)' : 'var(--border)',
-            }}>
-              {s === 'all' ? 'All' : s[0].toUpperCase() + s.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <label style={{
-          display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 220,
-          border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-2)',
-          padding: '0 10px', cursor: 'text', transition: 'border-color .12s',
-        }}
-          onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-          onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--border)'}
-        >
-          <Icon.Search size={13} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by MW no, conf, delivery or buyer…"
-            style={{ flex: 1, border: 'none', background: 'transparent', padding: '6px 0', outline: 'none', fontSize: 13, color: 'var(--text-1)', fontFamily: 'inherit', minWidth: 0 }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-3)', padding: 2, flexShrink: 0 }}>
-              <Icon.X size={12} />
-            </button>
-          )}
-        </label>
-      </div>
-
       {/* Table */}
       <div className="card" style={{ padding: 0 }}>
+        <div className="card-header">
+          <div style={{ display:'flex', gap:4 }}>
+            {[
+              { id:'all',      label:'All'      },
+              { id:'pending',  label:'Pending',  bg:'rgba(234,179,8,.13)',  color:'#92400e', bd:'rgba(234,179,8,.5)'  },
+              { id:'accepted', label:'Accepted', bg:'rgba(34,197,94,.14)',  color:'#15803d', bd:'rgba(34,197,94,.5)'  },
+              { id:'disputed', label:'Disputed', bg:'rgba(239,68,68,.13)',  color:'#dc2626', bd:'rgba(239,68,68,.5)'  },
+            ].map(({ id, label, bg, color, bd }) => {
+              const active = filterStatus === id;
+              return (
+                <button key={id} onClick={() => setFilterStatus(id)} style={{
+                  padding:'4px 11px', borderRadius:999, cursor:'pointer', fontSize:12, fontWeight:500,
+                  border:'1px solid', transition:'all .12s',
+                  background:  active && bg    ? bg    : active ? 'var(--accent)' : 'transparent',
+                  color:       active && color  ? color : active ? '#fff'         : 'var(--text-2)',
+                  borderColor: active && bd     ? bd    : active ? 'var(--accent)': 'var(--border)',
+                }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
+            <label
+              style={{ display:'flex', alignItems:'center', gap:6, border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', padding:'0 8px', cursor:'text', transition:'border-color .12s', width:200 }}
+              onFocusCapture={e => e.currentTarget.style.borderColor='var(--accent)'}
+              onBlurCapture={e => e.currentTarget.style.borderColor='var(--border)'}
+            >
+              <Icon.Search size={12} style={{ color:'var(--text-3)', flexShrink:0 }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search millweights…"
+                style={{ flex:1, border:'none', background:'transparent', padding:'5px 0', outline:'none', fontSize:12.5, color:'var(--text-1)', fontFamily:'inherit', minWidth:0 }} />
+              {search && <button onClick={() => setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', color:'var(--text-3)', padding:2, flexShrink:0 }}><Icon.X size={11} /></button>}
+            </label>
+            <ViewMenu cols={_MW_COLS} visible={visibleCols} onChange={setVisibleCols} />
+          </div>
+        </div>
         <table className="tbl">
           <thead>
             <tr>

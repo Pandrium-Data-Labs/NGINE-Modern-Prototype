@@ -2,7 +2,7 @@
 
 const { Field, Input, Select, Badge, Section, DatePicker, TagInput, fmtNum, fmtINR, ViewMenu } = window.UI;
 const { DELIVERIES, CONFIRMATIONS, STATIONS, fmtDateShort, fmtDate, INVOICES } = window.NCData;
-const { useTableControls, SortableHeader, FilterToolbar } = window.TableFilters;
+const { useTableControls, SortableHeader } = window.TableFilters;
 
 const DELIVERY_COLS = [
   { field:'id',     label:'Delivery ID', type:'text'   },
@@ -1109,6 +1109,10 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
   const [tab,  setTab]  = React.useState('all');
   const dCtrl = useTableControls(DELIVERY_COLS);
   const iCtrl = useTableControls(INVOICE_COLS);
+  const [dSearch,   setDSearch]   = React.useState('');
+  const [dShowSugg, setDShowSugg] = React.useState(false);
+  const [iSearch,   setISearch]   = React.useState('');
+  const [iShowSugg, setIShowSugg] = React.useState(false);
   const [dExpMode, setDExpMode] = React.useState(false);
   const [dExpSel,  setDExpSel]  = React.useState([]);
   const [dFmtOpen, setDFmtOpen] = React.useState(false);
@@ -1164,8 +1168,45 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
          : tab === 'unpaid'          ? invs.some(i => i.status !== 'paid')
          : true;
   });
-  const filtered         = dCtrl.sortData(dCtrl.filterData(tabFiltered));
-  const filteredInvoices = iCtrl.sortData(iCtrl.filterData(allInvoices));
+  const dTextFiltered = !dSearch.trim() ? tabFiltered : (() => {
+    const q = dSearch.toLowerCase();
+    return tabFiltered.filter(d =>
+      d.id.toLowerCase().includes(q) ||
+      d.conf.toLowerCase().includes(q) ||
+      (d.status || '').toLowerCase().includes(q)
+    );
+  })();
+  const filtered = dCtrl.sortData(dTextFiltered);
+
+  const dSuggestions = !dSearch.trim() ? [] : (() => {
+    const q = dSearch.toLowerCase(), seen = new Set(), items = [];
+    allDeliveries.forEach(d => {
+      if (!seen.has(d.id)   && d.id.toLowerCase().includes(q))   { seen.add(d.id);   items.push({ label:d.id,   sub:`${d.conf} · ${d.status}` }); }
+      if (!seen.has(d.conf) && d.conf.toLowerCase().includes(q)) { seen.add(d.conf); items.push({ label:d.conf, sub:'Conf No.' }); }
+    });
+    return items.slice(0, 8);
+  })();
+
+  const iTextFiltered = !iSearch.trim() ? allInvoices : (() => {
+    const q = iSearch.toLowerCase();
+    return allInvoices.filter(inv =>
+      inv.no.toLowerCase().includes(q) ||
+      inv.conf.toLowerCase().includes(q) ||
+      inv.seller.toLowerCase().includes(q) ||
+      (inv.status || '').toLowerCase().includes(q)
+    );
+  })();
+  const filteredInvoices = iCtrl.sortData(iTextFiltered);
+
+  const iSuggestions = !iSearch.trim() ? [] : (() => {
+    const q = iSearch.toLowerCase(), seen = new Set(), items = [];
+    allInvoices.forEach(inv => {
+      if (!seen.has(inv.no)     && inv.no.toLowerCase().includes(q))     { seen.add(inv.no);     items.push({ label:inv.no,     sub:`${inv.conf} · ${inv.seller}` }); }
+      if (!seen.has(inv.conf)   && inv.conf.toLowerCase().includes(q))   { seen.add(inv.conf);   items.push({ label:inv.conf,   sub:'Conf No.' }); }
+      if (!seen.has(inv.seller) && inv.seller.toLowerCase().includes(q)) { seen.add(inv.seller); items.push({ label:inv.seller, sub:'Seller' }); }
+    });
+    return items.slice(0, 8);
+  })();
 
   const _dl = (content, filename, mime) => {
     const blob = new Blob(['﻿', content], { type: mime });
@@ -1323,13 +1364,47 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
               </button>
             ))}
           </div>
-          <div style={{ marginLeft:'auto' }}>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
+            <div style={{ position:'relative', flexShrink:0 }}>
+              <label
+                style={{ display:'flex', alignItems:'center', gap:6, border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', padding:'0 8px', cursor:'text', transition:'border-color .12s', width:200 }}
+                onFocusCapture={e => { e.currentTarget.style.borderColor='var(--accent)'; setDShowSugg(true); }}
+                onBlurCapture={e => { e.currentTarget.style.borderColor='var(--border)'; setTimeout(() => setDShowSugg(false), 150); }}
+              >
+                <Icon.Search size={12} style={{ color:'var(--text-3)', flexShrink:0 }} />
+                <input
+                  value={dSearch}
+                  onChange={e => { setDSearch(e.target.value); setDShowSugg(true); }}
+                  onFocus={() => setDShowSugg(true)}
+                  placeholder="Search deliveries…"
+                  style={{ flex:1, border:'none', background:'transparent', padding:'5px 0', outline:'none', fontSize:12.5, color:'var(--text-1)', fontFamily:'inherit', minWidth:0 }}
+                />
+                {dSearch && (
+                  <button onMouseDown={() => { setDSearch(''); setDShowSugg(false); }}
+                    style={{ background:'none', border:'none', cursor:'pointer', display:'flex', color:'var(--text-3)', padding:2, flexShrink:0 }}>
+                    <Icon.X size={11} />
+                  </button>
+                )}
+              </label>
+              {dShowSugg && dSuggestions.length > 0 && (
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:300, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 4px 6px rgba(0,0,0,.06),0 12px 32px rgba(0,0,0,.18)', width:280, overflow:'hidden' }}>
+                  {dSuggestions.map((s, i) => (
+                    <button key={i} onMouseDown={() => { setDSearch(s.label); setDShowSugg(false); }}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', padding:'7px 10px', background:'none', border:'none', borderBottom: i < dSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit', transition:'background .1s' }}
+                      onMouseEnter={e => e.currentTarget.style.background='var(--surface-2)'}
+                      onMouseLeave={e => e.currentTarget.style.background='none'}>
+                      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                        <Icon.Search size={11} style={{ color:'var(--text-3)', flexShrink:0 }} />
+                        <span style={{ fontSize:12.5, color:'var(--text-1)', fontWeight:500 }}>{s.label}</span>
+                      </div>
+                      <span style={{ fontSize:11, color:'var(--text-3)' }}>{s.sub}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <ViewMenu cols={_DEL_COLS} visible={delVisibleCols} onChange={setDelVisibleCols} />
           </div>
-        </div>
-
-        <div style={{ padding:'0 16px 4px' }}>
-          <FilterToolbar ctrl={dCtrl} columnDefs={DELIVERY_COLS} totalCount={tabFiltered.length} filteredCount={filtered.length} />
         </div>
 
         <table className="tbl">
@@ -1396,6 +1471,44 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
         <div className="card-header" style={{ gap:8 }}>
           <div className="card-title">Invoices</div>
           <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
+            <div style={{ position:'relative', flexShrink:0 }}>
+              <label
+                style={{ display:'flex', alignItems:'center', gap:6, border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', padding:'0 8px', cursor:'text', transition:'border-color .12s', width:200 }}
+                onFocusCapture={e => { e.currentTarget.style.borderColor='var(--accent)'; setIShowSugg(true); }}
+                onBlurCapture={e => { e.currentTarget.style.borderColor='var(--border)'; setTimeout(() => setIShowSugg(false), 150); }}
+              >
+                <Icon.Search size={12} style={{ color:'var(--text-3)', flexShrink:0 }} />
+                <input
+                  value={iSearch}
+                  onChange={e => { setISearch(e.target.value); setIShowSugg(true); }}
+                  onFocus={() => setIShowSugg(true)}
+                  placeholder="Search invoices…"
+                  style={{ flex:1, border:'none', background:'transparent', padding:'5px 0', outline:'none', fontSize:12.5, color:'var(--text-1)', fontFamily:'inherit', minWidth:0 }}
+                />
+                {iSearch && (
+                  <button onMouseDown={() => { setISearch(''); setIShowSugg(false); }}
+                    style={{ background:'none', border:'none', cursor:'pointer', display:'flex', color:'var(--text-3)', padding:2, flexShrink:0 }}>
+                    <Icon.X size={11} />
+                  </button>
+                )}
+              </label>
+              {iShowSugg && iSuggestions.length > 0 && (
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:300, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 4px 6px rgba(0,0,0,.06),0 12px 32px rgba(0,0,0,.18)', width:280, overflow:'hidden' }}>
+                  {iSuggestions.map((s, i) => (
+                    <button key={i} onMouseDown={() => { setISearch(s.label); setIShowSugg(false); }}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', padding:'7px 10px', background:'none', border:'none', borderBottom: i < iSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit', transition:'background .1s' }}
+                      onMouseEnter={e => e.currentTarget.style.background='var(--surface-2)'}
+                      onMouseLeave={e => e.currentTarget.style.background='none'}>
+                      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                        <Icon.Search size={11} style={{ color:'var(--text-3)', flexShrink:0 }} />
+                        <span style={{ fontSize:12.5, color:'var(--text-1)', fontWeight:500 }}>{s.label}</span>
+                      </div>
+                      <span style={{ fontSize:11, color:'var(--text-3)' }}>{s.sub}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <ViewMenu cols={_INV_DI_COLS} visible={invVisibleCols} onChange={setInvVisibleCols} />
             {iExpMode ? (
               <>
@@ -1412,10 +1525,6 @@ const DeliveryInvoices = ({ onCmd, extraDeliveries = [], extraInvoices = [], ini
               </button>
             )}
           </div>
-        </div>
-
-        <div style={{ padding:'0 16px 4px' }}>
-          <FilterToolbar ctrl={iCtrl} columnDefs={INVOICE_COLS} totalCount={allInvoices.length} filteredCount={filteredInvoices.length} />
         </div>
 
         <table className="tbl">

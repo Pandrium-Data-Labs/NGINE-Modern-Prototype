@@ -44,7 +44,7 @@ const _KpiCard = ({ label, value, sub, subTone, accent }) => (
 
 // ── new note form ─────────────────────────────────────────────────────────────
 
-const _NoteForm = ({ onClose, onSave, prefill }) => {
+const _NoteForm = ({ onClose, onSave, prefill, filterConfNo }) => {
   const todayStr = new Date().toISOString().slice(0,10);
   const [type,       setType]       = React.useState(prefill?.type        || 'credit');
   const [invoiceNo,  setInvoiceNo]  = React.useState(prefill?.invoice     || '');
@@ -54,6 +54,7 @@ const _NoteForm = ({ onClose, onSave, prefill }) => {
   const [date,       setDate]       = React.useState(prefill?.date        ? (prefill.date instanceof Date ? prefill.date.toISOString().slice(0,10) : prefill.date) : todayStr);
   const [approvedBy, setApprovedBy] = React.useState(prefill?.approvedBy  || '');
 
+  const invoiceList = filterConfNo ? INVOICES.filter(i => i.conf === filterConfNo) : INVOICES;
   const selInvoice  = INVOICES.find(i => i.no === invoiceNo);
   const selConf     = selInvoice ? CONFIRMATIONS.find(c => c.no === selInvoice.conf) : null;
   const buyerName   = selInvoice?.buyer || '';
@@ -125,7 +126,7 @@ const _NoteForm = ({ onClose, onSave, prefill }) => {
                 <Field label="Invoice no." required span={2}>
                   <Select value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)}>
                     <option value="">Select invoice…</option>
-                    {INVOICES.map(i => (
+                    {invoiceList.map(i => (
                       <option key={i.no} value={i.no}>
                         {i.no} · {i.buyer} · {fmtINR(i.amount, { compact:true })} · {i.status}
                       </option>
@@ -265,15 +266,11 @@ const _CRDR_COLS = [
 
 // ── main list ──────────────────────────────────────────────────────────────────
 
-const CrDrNotes = ({ onCmd }) => {
-  const [view,         setView]        = React.useState('list');
-  const [formPrefill,  setFormPrefill] = React.useState(null);
+const CrDrNotes = ({ onCmd, initialConfNo, initialType }) => {
+  const [view,         setView]        = React.useState(() => initialConfNo ? 'new' : 'list');
+  const [formPrefill,  setFormPrefill] = React.useState(() => initialType ? { type: initialType } : null);
+  const [formConfNo,   setFormConfNo]  = React.useState(initialConfNo || null);
   const [extraNotes,   setExtraNotes]  = React.useState([]);
-  const [filterType,   setFilterType]  = React.useState('all');
-  const [filterBuyer,  setFilterBuyer] = React.useState('all');
-  const [filterInvoice,setFilterInvoice]= React.useState('');
-  const [dateFrom,     setDateFrom]    = React.useState('');
-  const [dateTo,       setDateTo]      = React.useState('');
   const [search,       setSearch]      = React.useState('');
   const [visibleCols,  setVisibleCols] = React.useState(
     () => new Set(_CRDR_COLS.filter(c => c.defaultOn).map(c => c.field))
@@ -284,45 +281,32 @@ const CrDrNotes = ({ onCmd }) => {
     return (
       <_NoteForm
         prefill={formPrefill}
-        onClose={() => { setView('list'); setFormPrefill(null); }}
-        onSave={(note) => { setExtraNotes(prev => [note, ...prev]); setView('list'); setFormPrefill(null); }}
+        filterConfNo={formConfNo}
+        onClose={() => { setView('list'); setFormPrefill(null); setFormConfNo(null); }}
+        onSave={(note) => { setExtraNotes(prev => [note, ...prev]); setView('list'); setFormPrefill(null); setFormConfNo(null); }}
       />
     );
   }
 
-  const allNotes    = [...extraNotes, ...CR_DR_NOTES];
-  const uniqueBuyers= [...new Set(allNotes.map(n => n.buyer))].sort();
+  const allNotes = [...extraNotes, ...CR_DR_NOTES];
+  const filtered = allNotes.filter(n => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      n.no.toLowerCase().includes(q)                         ||
+      (n.invoice     || '').toLowerCase().includes(q)        ||
+      (n.conf        || '').toLowerCase().includes(q)        ||
+      n.buyer.toLowerCase().includes(q)                      ||
+      (REASON_LABELS[n.reason] || '').toLowerCase().includes(q) ||
+      (n.description || '').toLowerCase().includes(q)
+    );
+  });
 
   // KPIs
   const totalCR   = allNotes.filter(n => n.type === 'credit').reduce((s, n) => s + n.amount, 0);
   const totalDR   = allNotes.filter(n => n.type === 'debit').reduce((s, n) => s + n.amount, 0);
   const netImpact = totalDR - totalCR;
   const pending   = allNotes.filter(n => n.status !== 'settled').length;
-
-  // Filters
-  const filtered = allNotes.filter(n => {
-    if (filterType   !== 'all' && n.type  !== filterType)  return false;
-    if (filterBuyer  !== 'all' && n.buyer !== filterBuyer) return false;
-    if (filterInvoice.trim() && !(n.invoice||'').toLowerCase().includes(filterInvoice.trim().toLowerCase())) return false;
-    if (dateFrom) {
-      const nDate = n.date instanceof Date ? n.date : new Date(n.date);
-      if (nDate < new Date(dateFrom)) return false;
-    }
-    if (dateTo) {
-      const nDate = n.date instanceof Date ? n.date : new Date(n.date);
-      if (nDate > new Date(dateTo + 'T23:59:59')) return false;
-    }
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      n.no.toLowerCase().includes(q)               ||
-      (n.invoice||'').toLowerCase().includes(q)    ||
-      (n.conf||'').toLowerCase().includes(q)       ||
-      n.buyer.toLowerCase().includes(q)            ||
-      (REASON_LABELS[n.reason]||'').toLowerCase().includes(q) ||
-      (n.description||'').toLowerCase().includes(q)
-    );
-  });
 
   return (
     <div className="content-inner">
@@ -332,8 +316,8 @@ const CrDrNotes = ({ onCmd }) => {
           <div className="page-sub">Post-invoice adjustments · {allNotes.length} notes · {pending} pending settlement</div>
         </div>
         <div className="page-actions">
-          <ViewMenu cols={_CRDR_COLS} visible={visibleCols} onChange={setVisibleCols} />
-          <button className="btn btn-primary" onClick={() => setView('new')}><Icon.Plus size={14} /> New CR / DR Note</button>
+          <button className="btn" onClick={() => onCmd('nav:payment')}><Icon.Wallet size={14} /> Record Payment</button>
+          <button className="btn btn-primary" onClick={() => { setFormPrefill(null); setFormConfNo(null); setView('new'); }}><Icon.Plus size={14} /> New CR / DR Note</button>
         </div>
       </div>
 
@@ -352,65 +336,25 @@ const CrDrNotes = ({ onCmd }) => {
           subTone={pending > 0 ? 'warn' : 'positive'} />
       </div>
 
-      {/* Filters */}
-      <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap', alignItems:'center' }}>
-
-        {/* Type chips */}
-        <div style={{ display:'flex', gap:3 }}>
-          {[['all','All types'],['credit','CR only'],['debit','DR only']].map(([t, l]) => (
-            <button key={t} onClick={() => setFilterType(t)} style={{
-              padding:'4px 12px', borderRadius:999, cursor:'pointer', fontSize:12, fontWeight:500, border:'1px solid',
-              background:   filterType===t ? (t==='credit'?'#15803d':t==='debit'?'#dc2626':'var(--accent)') : 'transparent',
-              color:        filterType===t ? '#fff' : (t==='credit'?'#15803d':t==='debit'?'#dc2626':'var(--text-2)'),
-              borderColor:  filterType===t ? (t==='credit'?'#15803d':t==='debit'?'#dc2626':'var(--accent)') : (t==='credit'?'#15803d55':t==='debit'?'#dc262655':'var(--border)'),
-            }}>{l}</button>
-          ))}
-        </div>
-
-        {/* Buyer filter */}
-        <select value={filterBuyer} onChange={e => setFilterBuyer(e.target.value)}
-          style={{ border:'1px solid var(--border)', borderRadius:6, padding:'5px 10px', fontSize:12.5, background:'var(--bg-2)', color:'var(--text-1)', fontFamily:'inherit', cursor:'pointer', outline:'none' }}>
-          <option value="all">All buyers</option>
-          {uniqueBuyers.map(b => <option key={b} value={b}>{b}</option>)}
-        </select>
-
-        {/* Invoice filter */}
-        <input value={filterInvoice} onChange={e => setFilterInvoice(e.target.value)}
-          placeholder="Filter by invoice…"
-          style={{ border:'1px solid var(--border)', borderRadius:6, padding:'5px 10px', fontSize:12.5, background:'var(--bg-2)', color:'var(--text-1)', fontFamily:'inherit', outline:'none', width:160 }}
-          onFocus={e => e.target.style.borderColor='var(--accent)'}
-          onBlur={e => e.target.style.borderColor='var(--border)'} />
-
-        {/* Date range */}
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <span style={{ fontSize:12, color:'var(--text-3)' }}>From</span>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            style={{ border:'1px solid var(--border)', borderRadius:6, padding:'4px 8px', fontSize:12.5, background:'var(--bg-2)', color:'var(--text-1)', fontFamily:'inherit', outline:'none', cursor:'pointer' }}
-            onFocus={e => e.target.style.borderColor='var(--accent)'}
-            onBlur={e => e.target.style.borderColor='var(--border)'} />
-          <span style={{ fontSize:12, color:'var(--text-3)' }}>To</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            style={{ border:'1px solid var(--border)', borderRadius:6, padding:'4px 8px', fontSize:12.5, background:'var(--bg-2)', color:'var(--text-1)', fontFamily:'inherit', outline:'none', cursor:'pointer' }}
-            onFocus={e => e.target.style.borderColor='var(--accent)'}
-            onBlur={e => e.target.style.borderColor='var(--border)'} />
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-3)', display:'flex', padding:2 }}><Icon.X size={12} /></button>
-          )}
-        </div>
-
-        {/* Search */}
-        <label style={{ display:'flex', alignItems:'center', gap:7, flex:1, minWidth:200, border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', padding:'0 10px', cursor:'text' }}
-          onFocusCapture={e => e.currentTarget.style.borderColor='var(--accent)'}
-          onBlurCapture={e => e.currentTarget.style.borderColor='var(--border)'}>
-          <Icon.Search size={13} style={{ color:'var(--text-3)', flexShrink:0 }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by note no, invoice, buyer, reason…"
-            style={{ flex:1, border:'none', background:'transparent', padding:'6px 0', outline:'none', fontSize:13, color:'var(--text-1)', fontFamily:'inherit', minWidth:0 }} />
-          {search && <button onClick={() => setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', color:'var(--text-3)', padding:2 }}><Icon.X size={12} /></button>}
-        </label>
-      </div>
-
+      {/* Search */}
       {/* Table */}
       <div className="card" style={{ padding:0 }}>
+        <div className="card-header">
+          <div className="card-title">CR / DR Notes</div>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
+            <label
+              style={{ display:'flex', alignItems:'center', gap:6, border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-2)', padding:'0 8px', cursor:'text', transition:'border-color .12s', width:200 }}
+              onFocusCapture={e => e.currentTarget.style.borderColor='var(--accent)'}
+              onBlurCapture={e => e.currentTarget.style.borderColor='var(--border)'}
+            >
+              <Icon.Search size={12} style={{ color:'var(--text-3)', flexShrink:0 }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes…"
+                style={{ flex:1, border:'none', background:'transparent', padding:'5px 0', outline:'none', fontSize:12.5, color:'var(--text-1)', fontFamily:'inherit', minWidth:0 }} />
+              {search && <button onClick={() => setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', color:'var(--text-3)', padding:2, flexShrink:0 }}><Icon.X size={11} /></button>}
+            </label>
+            <ViewMenu cols={_CRDR_COLS} visible={visibleCols} onChange={setVisibleCols} />
+          </div>
+        </div>
         <table className="tbl">
           <thead>
             <tr>
@@ -467,7 +411,7 @@ const CrDrNotes = ({ onCmd }) => {
                   {vis('status')      && <td><Badge tone={_statusTone(n.status)}>{n.status}</Badge></td>}
                   <td>
                     <button className="btn btn-sm btn-ghost" style={{ padding:'2px 6px' }}
-                      onClick={() => { setFormPrefill(n); setView('new'); }}>
+                      onClick={() => { setFormPrefill(n); setFormConfNo(n.conf || null); setView('new'); }}>
                       <Icon.Edit size={12} />
                     </button>
                   </td>
